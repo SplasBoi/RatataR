@@ -3,7 +3,7 @@
 RatataR is a custom launcher for the PC version of Ratatouille.
 It currently supports overlay.exe for the USA version of Ratatouille.
 If you're unsure which version you have, check the MD5 hash for overlay.exe:
-***3158A9E7BD4AA5BC6DC0976DEB40FB12***
+***9948615D068513BAB955DE0CBADF00C2***
 
 ## List of features
 - Custom resolution
