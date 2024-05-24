@@ -13,6 +13,7 @@ bool invertVerticalLook;
 bool removeFpsCap;
 bool autoSave;
 bool speedrunMode;
+bool dashBonking;
 char buffer[256];
 BYTE* resW;
 BYTE* resH;
@@ -148,6 +149,7 @@ void patch(BYTE* ptr, BYTE* buf, size_t len) {
 
 void applyPatches(LPVOID param) {
     BYTE zero[] = {0x00};
+    BYTE jmp[] = {0xEB};
     BYTE patchCursorHide[] = {0x66,0x81,0x7c,0x24,0x18,0x01,0x00,0x75};
     BYTE patchWindowed[] = {0xfe,0x85};
     BYTE patchWindowPosBorder[] = {0xfe,0xff,0xff,0xff};
@@ -188,17 +190,25 @@ void applyPatches(LPVOID param) {
     //BYPASS DISC REQUIREMENT
     patch((BYTE*)0x00654F52, (BYTE*)"\x90\x90\x90\x90\x90\x90", 6);
     patch((BYTE*)0x00654FD7, (BYTE*)"\x90\x90", 2);
-    patch((BYTE*)0x00655015, (BYTE*)"\xEB", 1);
+    patch((BYTE*)0x00655015, (BYTE*)jmp, 1);
     //MUSIC & VIDEO DIRECTORY
     patch((BYTE*)0x007DF135, noCDDirectory, noCDDirectorySize);
     patch((BYTE*)0x00654D8D, (BYTE*)"\x90\x90\x90\x90\x90\x90", 6);
 
     if (!speedrunMode) {
         //Apply FOV
-        patch((BYTE*)0x00580C7C, (BYTE*)"\xEB", 1); //BYPASS FOV OVERFLOW ERROR
+        patch((BYTE*)0x00580C7C, (BYTE*)jmp, 1); //BYPASS FOV OVERFLOW ERROR
         patch((BYTE*)0x0070A7D8, reinterpret_cast<BYTE*>(&fov), sizeof(float));
         patch((BYTE*)0x0070A7A4, reinterpret_cast<BYTE*>(&climbFOV), sizeof(float));
         patch((BYTE*)0x0070A798, reinterpret_cast<BYTE*>(&runSlideFOV), sizeof(double));
+
+        // Swap level select to movie menu in main menu
+        patch((BYTE*)0x00559D03, (BYTE*)"\x08", 1);
+
+        // Remove dash bonking
+        if (dashBonking) {
+            patch((BYTE*)0x0043DDA5, (BYTE*)jmp, 1);
+        }
 
         //Enable console
         if (console) {
@@ -220,8 +230,14 @@ void applyPatches(LPVOID param) {
     }
 
     if (!autoSave) {
-        patch((BYTE*)0x00559A04, (BYTE*)"\x00", 1);
+        patch((BYTE*)0x00559A04, (BYTE*)zero, 1);
     }
+
+    // Allow banned save names
+    patch((BYTE*)0x004E8F5A, (BYTE*)jmp, 1);
+
+    // Allow empty save names
+    patch((BYTE*)0x00557AAA, (BYTE*)jmp, 1);
 }
 
 DWORD WINAPI MainThread(LPVOID param) {
@@ -240,11 +256,13 @@ DWORD WINAPI MainThread(LPVOID param) {
     autoSave = GetPrivateProfileIntA("CONFIG","autoSave",1,configPath.c_str());
     fov = GetPrivateProfileIntA("CONFIG","fov",95,configPath.c_str());
     speedrunMode = GetPrivateProfileIntA("CONFIG","speedrunMode",0,configPath.c_str());
+    dashBonking = GetPrivateProfileIntA("CONFIG", "dashBonking", 1, configPath.c_str());
 
     displayMode = buffer;
     for (char& c : displayMode) {
         c = std::tolower(c);
     }
+    
     if (displayMode != "windowed" && displayMode != "borderless" && displayMode != "fullscreen") {
         displayMode = "fullscreen";
     }
@@ -308,9 +326,9 @@ DWORD WINAPI MainThread(LPVOID param) {
 
 BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved) {
     switch (dwReason) {
-    case DLL_PROCESS_ATTACH:
-        CreateThread(0,0,MainThread,hModule,0,0);
-        break;
+        case DLL_PROCESS_ATTACH:
+            CreateThread(0,0,MainThread,hModule,0,0);
+            break;
     }
     return true;
 }
